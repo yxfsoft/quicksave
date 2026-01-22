@@ -1,0 +1,36 @@
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.env
+
+# Flutter
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+*.iml
+
+# Node
+node_modules/
+npm-debug.log
+
+# Logs
+*.log
+logs/
