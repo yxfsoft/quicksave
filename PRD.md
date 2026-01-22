@@ -1,6 +1,6 @@
 # QuickSave 产品需求文档 (PRD)
 
-> 版本: 1.0 | 更新日期: 2026-01-22
+> 版本: 1.1 | 更新日期: 2026-01-22
 
 ## 1. 产品概述
 
@@ -24,11 +24,12 @@
 │  • 窗口检测       │  • B站/YT 解析    │  • 搜索和筛选           │
 │  • 剪贴板读取     │  • GitHub 解析    │  • 标签管理             │
 │  • 托盘常驻       │                   │  • 设置配置             │
+│  • 公众号抓取     │                   │                         │
 ├──────────────────┴──────────────────┴──────────────────────────┤
 │                        后端服务 (FastAPI)                        │
 ├────────────┬────────────┬────────────┬─────────────────────────┤
-│  用户服务   │  收藏服务   │  AI 服务   │    内容抓取服务         │
-│  (认证)     │  (CRUD)    │  (标签/摘要)│   (公众号/视频号)       │
+│  用户服务   │  收藏服务   │  AI 服务   │    视频号解析服务        │
+│  (认证)     │  (CRUD)    │  (标签/摘要)│                         │
 ├────────────┴────────────┴────────────┴─────────────────────────┤
 │                           数据层                                 │
 ├─────────────────────────────┬───────────────────────────────────┤
@@ -68,17 +69,19 @@
 | 选中文本 | 选中内容、来源页面 URL |
 | 图片 | 图片 URL、来源页面 |
 
-**微信公众号文章 (客户端 + 后端抓取)**
+**微信公众号文章 (客户端抓取)**
 
 | 步骤 | 说明 |
 |------|------|
 | 1 | 用户在微信打开公众号文章 |
 | 2 | 按快捷键触发 |
 | 3 | 客户端通过 UI Automation 获取文章 URL |
-| 4 | 发送 URL 到后端 |
-| 5 | 后端 HTTP 抓取文章全文 |
+| 4 | 客户端直接 HTTP 请求抓取文章全文 |
+| 5 | AI 处理后保存到云端 |
 
 抓取内容：标题、作者、公众号名称、发布时间、正文、图片
+
+> 公众号文章是公开内容，客户端直接抓取更高效，无需绕行后端
 
 **微信视频号 (剪贴板 + 后端解析)**
 
@@ -237,8 +240,7 @@ quicksave/
 │   │   │       └── share.py
 │   │   ├── services/
 │   │   │   ├── capture/       # 内容抓取
-│   │   │   │   ├── wechat_article.py
-│   │   │   │   └── wechat_video.py
+│   │   │   │   └── wechat_video.py  # 视频号解析
 │   │   │   ├── ai/            # AI 处理
 │   │   │   │   └── mock_ai.py
 │   │   │   └── storage/       # 存储服务
@@ -287,9 +289,12 @@ lib/
 │   ├── capture/
 │   │   ├── capture_service.dart     # 抓取服务
 │   │   ├── capture_dialog.dart      # 收藏成功弹窗
+│   │   ├── parsers/                 # 内容解析器
+│   │   │   └── wechat_article_parser.dart  # 公众号文章解析
 │   │   └── source_handlers/         # 各来源处理器
 │   │       ├── browser_handler.dart
-│   │       ├── wechat_handler.dart
+│   │       ├── wechat_article_handler.dart  # 公众号抓取
+│   │       ├── wechat_video_handler.dart    # 视频号处理
 │   │       └── clipboard_handler.dart
 │   ├── collection/
 │   │   ├── collection_list_page.dart
@@ -632,21 +637,9 @@ Response:
   collections: Collection[]
 ```
 
-### 5.7 内容抓取接口 (内部)
+### 5.7 视频号解析接口
 
 ```yaml
-# 抓取公众号文章
-POST /api/v1/capture/wechat-article
-Request:
-  url: string             # mp.weixin.qq.com 链接
-Response:
-  title: string
-  author: string
-  account: string
-  content: string
-  images: string[]
-  publish_time: string
-
 # 解析视频号
 POST /api/v1/capture/wechat-video
 Request:
@@ -658,6 +651,8 @@ Response:
   duration: int
   download_url: string
 ```
+
+> 注：公众号文章由客户端直接抓取，无需后端接口
 
 ---
 
@@ -880,19 +875,30 @@ def mock_classify(source_type: str, title: str) -> str:
 
 ### 7.3 内容抓取 Mock
 
+**客户端 - 公众号文章抓取 Mock (Dart)**
+
+```dart
+// client/lib/features/capture/parsers/mock_wechat_article.dart
+
+class MockWechatArticle {
+  static Map<String, dynamic> parse(String url) {
+    // Mock 模式下返回固定数据
+    return {
+      'title': 'Mock 公众号文章标题',
+      'author': 'Mock 作者',
+      'account': 'Mock 公众号',
+      'content': '这是一篇 Mock 的公众号文章内容，用于测试收藏流程...',
+      'images': ['https://via.placeholder.com/800x400'],
+      'publish_time': '2026-01-20',
+    };
+  }
+}
+```
+
+**服务端 - 视频号解析 Mock (Python)**
+
 ```python
 # server/app/services/mock/capture.py
-
-MOCK_WECHAT_ARTICLES = {
-    "default": {
-        "title": "Mock 公众号文章标题",
-        "author": "Mock 作者",
-        "account": "Mock 公众号",
-        "content": "这是一篇 Mock 的公众号文章内容...",
-        "images": ["https://via.placeholder.com/800x400"],
-        "publish_time": "2026-01-20"
-    }
-}
 
 MOCK_WECHAT_VIDEOS = {
     "default": {
@@ -903,10 +909,6 @@ MOCK_WECHAT_VIDEOS = {
         "download_url": "https://example.com/mock-video.mp4"
     }
 }
-
-def mock_capture_wechat_article(url: str):
-    """Mock 抓取公众号文章"""
-    return MOCK_WECHAT_ARTICLES["default"]
 
 def mock_capture_wechat_video(share_url: str):
     """Mock 解析视频号"""
